@@ -5,6 +5,7 @@
 namespace Supercluster.KDTree.Utilities
 {
     using System;
+    using System.Collections.Generic;
     using System.Runtime.CompilerServices;
 
     /// <summary>
@@ -23,21 +24,19 @@ namespace Supercluster.KDTree.Utilities
         /// <typeparam name="TNode">The type of the nodes of the <see cref="KDTree{TDimension,TNode}"/></typeparam>
         /// <returns>The points and nodes in the <see cref="KDTree{TDimension,TNode}"/> implicitly referenced by the <see cref="BoundedPriorityList{TElement,TPriority}"/>.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Tuple<TDimension[], TNode>[] ToResultSet<TPriority, TDimension, TNode>(
+        public static bool ToResultSet<TPriority, TDimension, TNode>(
            this BoundedPriorityList<int, TPriority> list,
-           KDTree<TDimension, TNode> tree)
+           KDTree<TDimension, TNode> tree, Func<TDimension[], TNode, KDTree<TDimension, TNode>.TreeNodeInfo> nodeBuilder, List<KDTree<TDimension, TNode>.TreeNodeInfo> results)
            where TDimension : IComparable<TDimension>
            where TPriority : IComparable<TPriority>
         {
-            var array = new Tuple<TDimension[], TNode>[list.Count];
+            results.Clear();
             for (var i = 0; i < list.Count; i++)
             {
-                array[i] = new Tuple<TDimension[], TNode>(
-                    tree.InternalPointArray[list[i]],
-                    tree.InternalNodeArray[list[i]]);
+                results.Add(nodeBuilder(tree.InternalPointList[list[i]], tree.InternalNodeList[list[i]]));
             }
 
-            return array;
+            return results.Count > 0;
         }
     }
 }

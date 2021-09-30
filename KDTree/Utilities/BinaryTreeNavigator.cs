@@ -5,6 +5,7 @@
 namespace Supercluster.KDTree.Utilities
 {
     using System;
+    using System.Collections.Generic;
 
     using static BinaryTreeNavigation;
 
@@ -19,47 +20,89 @@ namespace Supercluster.KDTree.Utilities
         /// <summary>
         /// A reference to the pointArray in which the binary tree is stored in.
         /// </summary>
-        private readonly TPoint[] pointArray;
-
-        private readonly TNode[] nodeArray;
+        private readonly List<TPoint> pointList;
+        private readonly List<TNode> nodeList;
+        private BinaryTreeNavigator<TPoint, TNode> left;
+        private BinaryTreeNavigator<TPoint, TNode> right;
+        private BinaryTreeNavigator<TPoint, TNode> parent;
 
         /// <summary>
         /// The index in the pointArray that the current node resides in.
         /// </summary>
-        public int Index { get; }
+        public int Index { get; private set; }
 
         /// <summary>
         /// The left child of the current node.
         /// </summary>
         public BinaryTreeNavigator<TPoint, TNode> Left
-            =>
-                LeftChildIndex(this.Index) < this.pointArray.Length - 1
-                    ? new BinaryTreeNavigator<TPoint, TNode>(this.pointArray, this.nodeArray, LeftChildIndex(this.Index))
-                    : null;
-
+        {
+            get {
+                if(LeftChildIndex(this.Index) < this.pointList.Count - 1) {
+                    if (null == left) {
+                        left = new BinaryTreeNavigator<TPoint, TNode>(this.pointList, this.nodeList, LeftChildIndex(this.Index));
+                        left.parent = this;
+                    }
+                    else {
+                        left.Index = LeftChildIndex(this.Index);
+                        left.parent.Index = this.Index;
+                    }
+                    return left;
+                }
+                else {
+                    return null;
+                }
+            }
+        }
         /// <summary>
         /// The right child of the current node.
         /// </summary>
         public BinaryTreeNavigator<TPoint, TNode> Right
-               =>
-                   RightChildIndex(this.Index) < this.pointArray.Length - 1
-                       ? new BinaryTreeNavigator<TPoint, TNode>(this.pointArray, this.nodeArray, RightChildIndex(this.Index))
-                       : null;
-
+        {
+            get {
+                if(RightChildIndex(this.Index) < this.pointList.Count - 1) {
+                    if (null == right) {
+                        right = new BinaryTreeNavigator<TPoint, TNode>(this.pointList, this.nodeList, RightChildIndex(this.Index));
+                        right.parent = this;
+                    }
+                    else {
+                        right.Index = RightChildIndex(this.Index);
+                        right.parent.Index = this.Index;
+                    }
+                    return right;
+                }
+                else {
+                    return null;
+                }
+            }
+        }
         /// <summary>
         /// The parent of the current node.
         /// </summary>
-        public BinaryTreeNavigator<TPoint, TNode> Parent => this.Index == 0 ? null : new BinaryTreeNavigator<TPoint, TNode>(this.pointArray, this.nodeArray, ParentIndex(this.Index));
+        public BinaryTreeNavigator<TPoint, TNode> Parent
+        {
+            get {
+                if(this.Index == 0) {
+                    return null;
+                }
+                else {
+                    if (null == parent)
+                        parent = new BinaryTreeNavigator<TPoint, TNode>(this.pointList, this.nodeList, ParentIndex(this.Index));
+                    else
+                        parent.Index = ParentIndex(this.Index);
+                    return parent;
+                }
+            }
+        }
 
         /// <summary>
         /// The current <typeparamref name="TPoint"/>.
         /// </summary>
-        public TPoint Point => this.pointArray[this.Index];
+        public TPoint Point => this.pointList[this.Index];
 
         /// <summary>
         /// The current <typeparamref name="TNode"/>
         /// </summary>
-        public TNode Node => this.nodeArray[this.Index];
+        public TNode Node => this.nodeList[this.Index];
 
         /// <summary>
         /// Initializes a new instance of the <see cref="BinaryTreeNavigator{TPoint, TNode}"/> class.
@@ -67,11 +110,11 @@ namespace Supercluster.KDTree.Utilities
         /// <param name="pointArray">The point array backing the binary tree.</param>
         /// <param name="nodeArray">The node array corresponding to the point array.</param>
         /// <param name="index">The index of the node of interest in the pointArray. If not given, the node navigator start at the 0 index (the root of the tree).</param>
-        public BinaryTreeNavigator(TPoint[] pointArray, TNode[] nodeArray, int index = 0)
+        public BinaryTreeNavigator(List<TPoint> pointArray, List<TNode> nodeArray, int index = 0)
         {
             this.Index = index;
-            this.pointArray = pointArray;
-            this.nodeArray = nodeArray;
+            this.pointList = pointArray;
+            this.nodeList = nodeArray;
         }
     }
 }

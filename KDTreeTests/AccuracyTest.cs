@@ -1,4 +1,5 @@
 ﻿using KDTreeTests;
+using System.Collections.Generic;
 
 using NUnit.Framework;
 
@@ -34,27 +35,26 @@ namespace KDTreeTests
             //  2,3     4,7   8,1 
 
 
-            var points = new double[][]
+            var points = new List<double[]>
                              {
                                  new double[] { 7, 2 }, new double[] { 5, 4 }, new double[] { 2, 3 },
                                  new double[] { 4, 7 }, new double[] { 9, 6 }, new double[] { 8, 1 }
                              };
 
-            var nodes = new string[] { "Eric", "Is", "A", "Really", "Stubborn", "Ferret" };
+            var nodes = new List<string> { "Eric", "Is", "A", "Really", "Stubborn", "Ferret" };
             var tree = new KDTree<double, string>(
                 2,
-                points,
-                nodes,
                 Utilities.L2Norm_Squared_Double,
                 double.MinValue,
                 double.MaxValue);
+            tree.Build(points, nodes);
 
-            Assert.That(tree.InternalPointArray[0], Is.EqualTo(points[0]));
-            Assert.That(tree.InternalPointArray[LeftChildIndex(0)], Is.EqualTo(points[1]));
-            Assert.That(tree.InternalPointArray[LeftChildIndex(LeftChildIndex(0))], Is.EqualTo(points[2]));
-            Assert.That(tree.InternalPointArray[RightChildIndex(LeftChildIndex(0))], Is.EqualTo(points[3]));
-            Assert.That(tree.InternalPointArray[RightChildIndex(0)], Is.EqualTo(points[4]));
-            Assert.That(tree.InternalPointArray[LeftChildIndex(RightChildIndex(0))], Is.EqualTo(points[5]));
+            Assert.That(tree.InternalPointList[0], Is.EqualTo(points[0]));
+            Assert.That(tree.InternalPointList[LeftChildIndex(0)], Is.EqualTo(points[1]));
+            Assert.That(tree.InternalPointList[LeftChildIndex(LeftChildIndex(0))], Is.EqualTo(points[2]));
+            Assert.That(tree.InternalPointList[RightChildIndex(LeftChildIndex(0))], Is.EqualTo(points[3]));
+            Assert.That(tree.InternalPointList[RightChildIndex(0)], Is.EqualTo(points[4]));
+            Assert.That(tree.InternalPointList[LeftChildIndex(RightChildIndex(0))], Is.EqualTo(points[5]));
         }
 
 
@@ -76,15 +76,16 @@ namespace KDTreeTests
             //  2,3     4,7   8,1 
 
 
-            var points = new double[][]
+            var points = new List<double[]>
                              {
                                  new double[] { 7, 2 }, new double[] { 5, 4 }, new double[] { 2, 3 },
                                  new double[] { 4, 7 }, new double[] { 9, 6 }, new double[] { 8, 1 }
                              };
 
-            var nodes = new string[] { "Eric", "Is", "A", "Really", "Stubborn", "Ferret" };
+            var nodes = new List<string> { "Eric", "Is", "A", "Really", "Stubborn", "Ferret" };
 
-            var tree = new KDTree<double, string>(2, points, nodes, Utilities.L2Norm_Squared_Double);
+            var tree = new KDTree<double, string>(2, Utilities.L2Norm_Squared_Double);
+            tree.Build(points, nodes);
 
             var nav = tree.Navigator;
 
@@ -116,21 +117,23 @@ namespace KDTreeTests
             var range = 1000;
 
             var treePoints = Utilities.GenerateDoubles(dataSize, range);
-            var treeNodes = Utilities.GenerateDoubles(dataSize, range).Select(d => d.ToString()).ToArray();
+            var treeNodes = new List<string>(Utilities.GenerateDoubles(dataSize, range).Select(d => d.ToString()));
             var testData = Utilities.GenerateDoubles(testDataSize, range);
 
 
-            var tree = new KDTree<double, string>(2, treePoints, treeNodes, Utilities.L2Norm_Squared_Double);
+            var tree = new KDTree<double, string>(2, Utilities.L2Norm_Squared_Double);
+            tree.Build(treePoints, treeNodes);
 
             for (int i = 0; i < testDataSize; i++)
             {
-                var treeNearest = tree.NearestNeighbors(testData[i], 1);
+                List<KDTree<double, string>.TreeNodeInfo> treeNearest = new List<KDTree<double, string>.TreeNodeInfo>();
+                bool ret = tree.NearestNeighbors(testData[i], 1, (coords, str)=> { return new KDTree<double, string>.TreeNodeInfo { Coordinates = coords, Node = str }; }, treeNearest);
                 var linearNearest = Utilities.LinearSearch(treePoints, treeNodes, testData[i], Utilities.L2Norm_Squared_Double);
 
-                Assert.That(Utilities.L2Norm_Squared_Double(testData[i], linearNearest.Item1), Is.EqualTo(Utilities.L2Norm_Squared_Double(testData[i], treeNearest[0].Item1)));
+                Assert.That(Utilities.L2Norm_Squared_Double(testData[i], linearNearest.Coordinates), Is.EqualTo(Utilities.L2Norm_Squared_Double(testData[i], treeNearest[0].Coordinates)));
 
                 // TODO: wrote linear search for both node and point arrays
-                Assert.That(treeNearest[0].Item2, Is.EqualTo(linearNearest.Item2));
+                Assert.That(treeNearest[0].Node, Is.EqualTo(linearNearest.Node));
             }
         }
 
@@ -143,27 +146,27 @@ namespace KDTreeTests
             var radius = 100;
 
             var treeData = Utilities.GenerateDoubles(dataSize, range);
-            var treeNodes = Utilities.GenerateDoubles(dataSize, range).Select(d => d.ToString()).ToArray();
+            var treeNodes = new List<string>(Utilities.GenerateDoubles(dataSize, range).Select(d => d.ToString()));
             var testData = Utilities.GenerateDoubles(testDataSize, range);
-            var tree = new KDTree<double, string>(2, treeData, treeNodes, Utilities.L2Norm_Squared_Double);
+            var tree = new KDTree<double, string>(2, Utilities.L2Norm_Squared_Double);
+            tree.Build(treeData, treeNodes);
 
             for (int i = 0; i < testDataSize; i++)
             {
-                var treeRadial = tree.RadialSearch(testData[i], radius);
-                var linearRadial = Utilities.LinearRadialSearch(
+                List<KDTree<double, string>.TreeNodeInfo> treeRadial = new List<KDTree<double, string>.TreeNodeInfo>();
+                bool ret = tree.RadialSearch(testData[i], radius, -1, (coords, str) => new KDTree<double, string>.TreeNodeInfo { Coordinates = coords, Node = str }, treeRadial);
+                var linearRadial = new List<KDTree<double, string>.TreeNodeInfo>(Utilities.LinearRadialSearch(
                     treeData,
                     treeNodes,
                     testData[i],
                     Utilities.L2Norm_Squared_Double,
-                    radius);
+                    radius));
 
-                for (int j = 0; j < treeRadial.Length; j++)
+                for (int j = 0; j < treeRadial.Count; j++)
                 {
-                    Assert.That(treeRadial[j].Item1, Is.EqualTo(linearRadial[j].Item1));
-                    Assert.That(treeRadial[j].Item2, Is.EqualTo(linearRadial[j].Item2));
+                    Assert.That(treeRadial[j].Coordinates, Is.EqualTo(linearRadial[j].Coordinates));
+                    Assert.That(treeRadial[j].Node, Is.EqualTo(linearRadial[j].Node));
                 }
-
-
             }
         }
     }

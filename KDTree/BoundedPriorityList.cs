@@ -96,6 +96,18 @@ namespace Supercluster.KDTree
             }
         }
 
+        public void Clear()
+        {
+            this.priorityList.Clear();
+            this.elementList.Clear();
+        }
+
+        public void Reserve(int capacity)
+        {
+            this.priorityList.Capacity = capacity;
+            this.elementList.Capacity = capacity;
+        }
+
         /// <summary>
         /// Attempts to add the provided  <paramref name="item"/>. If the list
         /// is currently at maximum capacity and the elements priority is greater

@@ -54,7 +54,7 @@ namespace KDTreeTests
             return data.ToArray();
         }
 
-        public static double[][] GenerateDoubles(int points, double range)
+        public static List<double[]> GenerateDoubles(int points, double range)
         {
             var data = new List<double[]>();
             var random = new Random();
@@ -64,10 +64,10 @@ namespace KDTreeTests
                 data.Add(new double[] { (random.NextDouble() * range), (random.NextDouble() * range) });
             }
 
-            return data.ToArray();
+            return data;
         }
 
-        public static float[][] GenerateFloats(int points, double range)
+        public static List<float[]> GenerateFloats(int points, double range)
         {
             var data = new List<float[]>();
             var random = new Random();
@@ -77,10 +77,10 @@ namespace KDTreeTests
                 data.Add(new float[] { (float)(random.NextDouble() * range), (float)(random.NextDouble() * range) });
             }
 
-            return data.ToArray();
+            return data;
         }
 
-        public static float[][] GenerateFloats(int points, double range, int dimensions)
+        public static List<float[]> GenerateFloats(int points, double range, int dimensions)
         {
             var data = new List<float[]>();
             var random = new Random();
@@ -95,7 +95,7 @@ namespace KDTreeTests
                 data.Add(array);
             }
 
-            return data.ToArray();
+            return data;
         }
         #endregion
 
@@ -110,12 +110,12 @@ namespace KDTreeTests
         /// <param name="point"></param>
         /// <param name="metric"></param>
         /// <returns></returns>
-        public static T[] LinearSearch<T>(T[][] data, T[] point, Func<T[], T[], float> metric)
+        public static T[] LinearSearch<T>(List<T[]> data, List<T> point, Func<List<T>, T[], float> metric)
         {
             var bestDist = Double.PositiveInfinity;
             T[] bestPoint = null;
 
-            for (int i = 0; i < data.Length; i++)
+            for (int i = 0; i < data.Count; i++)
             {
                 var currentDist = metric(point, data[i]);
                 if (bestDist > currentDist)
@@ -128,12 +128,12 @@ namespace KDTreeTests
             return bestPoint;
         }
 
-        public static T[] LinearSearch<T>(T[][] data, T[] point, Func<T[], T[], double> metric)
+        public static T[] LinearSearch<T>(List<T[]> data, List<T> point, Func<List<T>, T[], double> metric)
         {
             var bestDist = Double.PositiveInfinity;
             T[] bestPoint = null;
 
-            for (int i = 0; i < data.Length; i++)
+            for (int i = 0; i < data.Count; i++)
             {
                 var currentDist = metric(point, data[i]);
                 if (bestDist > currentDist)
@@ -146,12 +146,12 @@ namespace KDTreeTests
             return bestPoint;
         }
 
-        public static Tuple<TPoint[], TNode> LinearSearch<TPoint, TNode>(TPoint[][] points, TNode[] nodes, TPoint[] target, Func<TPoint[], TPoint[], double> metric)
+        public static KDTree<TPoint, TNode>.TreeNodeInfo LinearSearch<TPoint, TNode>(List<TPoint[]> points, List<TNode> nodes, TPoint[] target, Func<TPoint[], TPoint[], double> metric) where TPoint : IComparable<TPoint>
         {
             var bestIndex = 0;
             var bestDist = Double.MaxValue;
 
-            for (int i = 0; i < points.Length; i++)
+            for (int i = 0; i < points.Count; i++)
             {
                 var currentDist = metric(points[i], target);
                 if (bestDist > currentDist)
@@ -161,15 +161,15 @@ namespace KDTreeTests
                 }
             }
 
-            return new Tuple<TPoint[], TNode>(points[bestIndex], nodes[bestIndex]);
+            return new KDTree<TPoint, TNode>.TreeNodeInfo { Coordinates = points[bestIndex], Node = nodes[bestIndex] };
         }
 
 
-        public static T[][] LinearRadialSearch<T>(T[][] data, T[] point, Func<T[], T[], double> metric, double radius)
+        public static IEnumerable<T[]> LinearRadialSearch<T>(List<T[]> data, List<T> point, Func<List<T>, T[], double> metric, double radius)
         {
-            var pointsInRadius = new BoundedPriorityList<T[], double>(data.Length, true);
+            var pointsInRadius = new BoundedPriorityList<T[], double>(data.Count, true);
 
-            for (int i = 0; i < data.Length; i++)
+            for (int i = 0; i < data.Count; i++)
             {
                 var currentDist = metric(point, data[i]);
                 if (radius >= currentDist)
@@ -178,15 +178,15 @@ namespace KDTreeTests
                 }
             }
 
-            return pointsInRadius.ToArray();
+            return pointsInRadius;
         }
 
 
-        public static Tuple<TPoint[], TNode>[] LinearRadialSearch<TPoint, TNode>(TPoint[][] points, TNode[] nodes, TPoint[] target, Func<TPoint[], TPoint[], double> metric, double radius)
+        public static IEnumerable<KDTree<TPoint, TNode>.TreeNodeInfo> LinearRadialSearch<TPoint, TNode>(List<TPoint[]> points, List<TNode> nodes, TPoint[] target, Func<TPoint[], TPoint[], double> metric, double radius) where TPoint : IComparable<TPoint>
         {
-            var pointsInRadius = new BoundedPriorityList<int, double>(points.Length, true);
+            var pointsInRadius = new BoundedPriorityList<int, double>(points.Count, true);
 
-            for (int i = 0; i < points.Length; i++)
+            for (int i = 0; i < points.Count; i++)
             {
                 var currentDist = metric(target, points[i]);
                 if (radius >= currentDist)
@@ -195,7 +195,7 @@ namespace KDTreeTests
                 }
             }
 
-            return pointsInRadius.Select(idx => new Tuple<TPoint[], TNode>(points[idx], nodes[idx])).ToArray();
+            return pointsInRadius.Select(idx => new KDTree<TPoint, TNode>.TreeNodeInfo { Coordinates = points[idx], Node = nodes[idx] });
         }
 
         #endregion

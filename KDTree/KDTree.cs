@@ -33,36 +33,20 @@ namespace Supercluster.KDTree
     public class KDTree<TDimension, TNode>
         where TDimension : IComparable<TDimension>
     {
-        /// <summary>
-        /// The number of points in the KDTree
-        /// </summary>
-        public int Count { get; }
-
+        public class TreeNodeInfo
+        {
+            public TDimension[] Coordinates;
+            public TNode Node;
+        }
         /// <summary>
         /// The numbers of dimensions that the tree has.
         /// </summary>
         public int Dimensions { get; }
 
         /// <summary>
-        /// The array in which the binary tree is stored. Enumerating this array is a level-order traversal of the tree.
-        /// </summary>
-        public TDimension[][] InternalPointArray { get; }
-
-        /// <summary>
-        /// The array in which the node objects are stored. There is a one-to-one correspondence with this array and the <see cref="InternalPointArray"/>.
-        /// </summary>
-        public TNode[] InternalNodeArray { get; }
-
-        /// <summary>
         /// The metric function used to calculate distance between points.
         /// </summary>
-        public Func<TDimension[], TDimension[], double> Metric { get; set; }
-
-        /// <summary>
-        /// Gets a <see cref="BinaryTreeNavigator{TPoint,TNode}"/> that allows for manual tree navigation,
-        /// </summary>
-        public BinaryTreeNavigator<TDimension[], TNode> Navigator
-            => new BinaryTreeNavigator<TDimension[], TNode>(this.InternalPointArray, this.InternalNodeArray);
+        public Func<TDimension[], TDimension[], double> Metric { get; }
 
         /// <summary>
         /// The maximum value along any dimension.
@@ -75,6 +59,36 @@ namespace Supercluster.KDTree
         private TDimension MinValue { get; }
 
         /// <summary>
+        /// The number of points in the KDTree
+        /// </summary>
+        public int Count { get; private set; }
+        /// <summary>
+        /// The list in which the binary tree is stored. Enumerating this list is a level-order traversal of the tree.
+        /// </summary>
+        public List<TDimension[]> InternalPointList { get; private set; }
+
+        /// <summary>
+        /// The list in which the node objects are stored. There is a one-to-one correspondence with this list and the <see cref="InternalPointList"/>.
+        /// </summary>
+        public List<TNode> InternalNodeList { get; private set; }
+
+        /// <summary>
+        /// Gets a <see cref="BinaryTreeNavigator{TPoint,TNode}"/> that allows for manual tree navigation,
+        /// </summary>
+        public BinaryTreeNavigator<TDimension[], TNode> Navigator
+        {
+            get {
+                if (null == navigator) {
+                    navigator = new BinaryTreeNavigator<TDimension[], TNode>(this.InternalPointList, this.InternalNodeList);
+                }
+                return navigator;
+            }
+        }
+
+        private BinaryTreeNavigator<TDimension[], TNode> navigator;
+        private BoundedPriorityList<int, double> nearestNeighborList = new BoundedPriorityList<int, double>(16, true);
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="KDTree{TDimension,TNode}"/> class.
         /// </summary>
         /// <param name="dimensions">The number of dimensions in the data set.</param>
@@ -83,43 +97,49 @@ namespace Supercluster.KDTree
         /// <param name="metric">The metric function which implicitly defines the metric space in which the KDTree operates in. This should satisfy the triangle inequality.</param>
         /// <param name="searchWindowMinValue">The minimum value to be used in node searches. If null, we assume that <typeparamref name="TDimension"/> has a static field named "MinValue". All numeric structs have this field.</param>
         /// <param name="searchWindowMaxValue">The maximum value to be used in node searches. If null, we assume that <typeparamref name="TDimension"/> has a static field named "MaxValue". All numeric structs have this field.</param>
-        public KDTree(
-            int dimensions,
-            TDimension[][] points,
-            TNode[] nodes,
+        public KDTree(int dimensions, 
             Func<TDimension[], TDimension[], double> metric,
             TDimension searchWindowMinValue = default(TDimension),
             TDimension searchWindowMaxValue = default(TDimension))
         {
             // Attempt find the Min/Max value if null.
-            if (searchWindowMinValue.Equals(default(TDimension)))
-            {
+            if (searchWindowMinValue.Equals(default(TDimension))) {
                 var type = typeof(TDimension);
                 this.MinValue = (TDimension)type.GetField("MinValue").GetValue(type);
             }
-            else
-            {
+            else {
                 this.MinValue = searchWindowMinValue;
             }
 
-            if (searchWindowMaxValue.Equals(default(TDimension)))
-            {
+            if (searchWindowMaxValue.Equals(default(TDimension))) {
                 var type = typeof(TDimension);
                 this.MaxValue = (TDimension)type.GetField("MaxValue").GetValue(type);
             }
-            else
-            {
+            else {
                 this.MaxValue = searchWindowMaxValue;
             }
 
+            this.Dimensions = dimensions;
+            this.Metric = metric;
+
+            this.InternalPointList = new List<TDimension[]>();
+            this.InternalNodeList = new List<TNode>();
+            this.Count = 0;
+        }
+        public void Build(
+            List<TDimension[]> points,
+            List<TNode> nodes)
+        {
             // Calculate the number of nodes needed to contain the binary tree.
             // This is equivalent to finding the power of 2 greater than the number of points
-            var elementCount = (int)Math.Pow(2, (int)(Math.Log(points.Length) / Math.Log(2)) + 1);
-            this.Dimensions = dimensions;
-            this.InternalPointArray = Enumerable.Repeat(default(TDimension[]), elementCount).ToArray();
-            this.InternalNodeArray = Enumerable.Repeat(default(TNode), elementCount).ToArray();
-            this.Metric = metric;
-            this.Count = points.Length;
+            var elementCount = (int)Math.Pow(2, (int)(Math.Log(points.Count) / Math.Log(2)) + 1);
+            this.InternalPointList.Clear();
+            this.InternalNodeList.Clear();
+            for(int ix = 0; ix < elementCount; ++ix) {
+                this.InternalPointList.Add(default(TDimension[]));
+                this.InternalNodeList.Add(default(TNode));
+            }
+            this.Count = points.Count;
             this.GenerateTree(0, 0, points, nodes);
         }
 
@@ -129,13 +149,14 @@ namespace Supercluster.KDTree
         /// <param name="point">The point whose neighbors we search for.</param>
         /// <param name="neighbors">The number of neighbors to look for.</param>
         /// <returns>The</returns>
-        public Tuple<TDimension[], TNode>[] NearestNeighbors(TDimension[] point, int neighbors)
+        public bool NearestNeighbors(TDimension[] point, int neighbors, Func<TDimension[], TNode, KDTree<TDimension, TNode>.TreeNodeInfo> nodeBuilder, List<TreeNodeInfo> results)
         {
-            var nearestNeighborList = new BoundedPriorityList<int, double>(neighbors, true);
+            nearestNeighborList.Clear();
+            nearestNeighborList.Reserve(point.Length);
             var rect = HyperRect<TDimension>.Infinite(this.Dimensions, this.MaxValue, this.MinValue);
             this.SearchForNearestNeighbors(0, point, rect, 0, nearestNeighborList, double.MaxValue);
 
-            return nearestNeighborList.ToResultSet(this);
+            return nearestNeighborList.ToResultSet(this, nodeBuilder, results);
         }
 
         /// <summary>
@@ -145,9 +166,10 @@ namespace Supercluster.KDTree
         /// <param name="radius">The radius of the hyper-sphere</param>
         /// <param name="neighboors">The number of neighbors to return.</param>
         /// <returns>The specified number of closest points in the hyper-sphere</returns>
-        public Tuple<TDimension[], TNode>[] RadialSearch(TDimension[] center, double radius, int neighboors = -1)
+        public bool RadialSearch(TDimension[] center, double radius, int neighboors, Func<TDimension[], TNode, KDTree<TDimension, TNode>.TreeNodeInfo> nodeBuilder, List<TreeNodeInfo> results)
         {
-            var nearestNeighbors = new BoundedPriorityList<int, double>(this.Count);
+            nearestNeighborList.Clear();
+            nearestNeighborList.Reserve(center.Length);
             if (neighboors == -1)
             {
                 this.SearchForNearestNeighbors(
@@ -155,7 +177,7 @@ namespace Supercluster.KDTree
                     center,
                     HyperRect<TDimension>.Infinite(this.Dimensions, this.MaxValue, this.MinValue),
                     0,
-                    nearestNeighbors,
+                    nearestNeighborList,
                     radius);
             }
             else
@@ -165,11 +187,11 @@ namespace Supercluster.KDTree
                     center,
                     HyperRect<TDimension>.Infinite(this.Dimensions, this.MaxValue, this.MinValue),
                     0,
-                    nearestNeighbors,
+                    nearestNeighborList,
                     radius);
             }
 
-            return nearestNeighbors.ToResultSet(this);
+            return nearestNeighborList.ToResultSet(this, nodeBuilder, results);
         }
 
         /// <summary>
@@ -200,8 +222,8 @@ namespace Supercluster.KDTree
 
             // The point with the median value all the current dimension now becomes the value of the current tree node
             // The previous node becomes the parents of the current node.
-            this.InternalPointArray[index] = medianPoint.Point;
-            this.InternalNodeArray[index] = medianPoint.Node;
+            this.InternalPointList[index] = medianPoint.Point;
+            this.InternalNodeList[index] = medianPoint.Node;
 
             // We now split the sorted points into 2 groups
             // 1st group: points before the median
@@ -232,8 +254,8 @@ namespace Supercluster.KDTree
             {
                 if (leftPoints.Length == 1)
                 {
-                    this.InternalPointArray[LeftChildIndex(index)] = leftPoints[0];
-                    this.InternalNodeArray[LeftChildIndex(index)] = leftNodes[0];
+                    this.InternalPointList[LeftChildIndex(index)] = leftPoints[0];
+                    this.InternalNodeList[LeftChildIndex(index)] = leftNodes[0];
                 }
             }
             else
@@ -246,8 +268,8 @@ namespace Supercluster.KDTree
             {
                 if (rightPoints.Length == 1)
                 {
-                    this.InternalPointArray[RightChildIndex(index)] = rightPoints[0];
-                    this.InternalNodeArray[RightChildIndex(index)] = rightNodes[0];
+                    this.InternalPointList[RightChildIndex(index)] = rightPoints[0];
+                    this.InternalNodeList[RightChildIndex(index)] = rightNodes[0];
                 }
             }
             else
@@ -273,8 +295,8 @@ namespace Supercluster.KDTree
             BoundedPriorityList<int, double> nearestNeighbors,
             double maxSearchRadiusSquared)
         {
-            if (this.InternalPointArray.Length <= nodeIndex || nodeIndex < 0
-                || this.InternalPointArray[nodeIndex] == null)
+            if (this.InternalPointList.Count <= nodeIndex || nodeIndex < 0
+                || this.InternalPointList[nodeIndex] == null)
             {
                 return;
             }
@@ -285,13 +307,13 @@ namespace Supercluster.KDTree
             // Split our hyper-rectangle into 2 sub rectangles along the current
             // node's point on the current dimension
             var leftRect = rect.Clone();
-            leftRect.MaxPoint[dim] = this.InternalPointArray[nodeIndex][dim];
+            leftRect.MaxPoint[dim] = this.InternalPointList[nodeIndex][dim];
 
             var rightRect = rect.Clone();
-            rightRect.MinPoint[dim] = this.InternalPointArray[nodeIndex][dim];
+            rightRect.MinPoint[dim] = this.InternalPointList[nodeIndex][dim];
 
             // Determine which side the target resides in
-            var compare = target[dim].CompareTo(this.InternalPointArray[nodeIndex][dim]);
+            var compare = target[dim].CompareTo(this.InternalPointList[nodeIndex][dim]);
 
             var nearerRect = compare <= 0 ? leftRect : rightRect;
             var furtherRect = compare <= 0 ? rightRect : leftRect;
@@ -342,7 +364,7 @@ namespace Supercluster.KDTree
             }
 
             // Try to add the current node to our nearest neighbors list
-            distanceSquaredToTarget = this.Metric(this.InternalPointArray[nodeIndex], target);
+            distanceSquaredToTarget = this.Metric(this.InternalPointList[nodeIndex], target);
             if (distanceSquaredToTarget.CompareTo(maxSearchRadiusSquared) <= 0)
             {
                 nearestNeighbors.Add(nodeIndex, distanceSquaredToTarget);
