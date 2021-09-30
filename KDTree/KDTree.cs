@@ -15,7 +15,7 @@ namespace Supercluster.KDTree
     /// Represents a KD-Tree. KD-Trees are used for fast spatial searches. Searching in a
     /// balanced KD-Tree is O(log n) where linear search is O(n). Points in the KD-Tree are
     /// equi-length arrays of type <typeparamref name="TDimension"/>. The node objects associated
-    /// with the points is an array of type <typeparamref name="TNode"/>.
+    /// with the points is an array of type <typeparamref name="TagInfo"/>.
     /// </summary>
     /// <remarks>
     /// KDTrees can be fairly difficult to understand at first. The following references helped me
@@ -28,15 +28,15 @@ namespace Supercluster.KDTree
     /// </ul>
     /// </remarks>
     /// <typeparam name="TDimension">The type of the dimension.</typeparam>
-    /// <typeparam name="TNode">The type representing the actual node objects.</typeparam>
+    /// <typeparam name="TagInfo">The type representing the actual node objects.</typeparam>
     [Serializable]
-    public class KDTree<TDimension, TNode>
+    public class KDTree<TDimension, TagInfo>
         where TDimension : IComparable<TDimension>
     {
         public class TreeNodeInfo
         {
             public TDimension[] Coordinates;
-            public TNode Node;
+            public TagInfo TagInfo;
         }
         /// <summary>
         /// The numbers of dimensions that the tree has.
@@ -70,22 +70,22 @@ namespace Supercluster.KDTree
         /// <summary>
         /// The list in which the node objects are stored. There is a one-to-one correspondence with this list and the <see cref="InternalPointList"/>.
         /// </summary>
-        public List<TNode> InternalNodeList { get; private set; }
+        public List<TagInfo> InternalNodeList { get; private set; }
 
         /// <summary>
         /// Gets a <see cref="BinaryTreeNavigator{TPoint,TNode}"/> that allows for manual tree navigation,
         /// </summary>
-        public BinaryTreeNavigator<TDimension[], TNode> Navigator
+        public BinaryTreeNavigator<TDimension[], TagInfo> Navigator
         {
             get {
                 if (null == navigator) {
-                    navigator = new BinaryTreeNavigator<TDimension[], TNode>(this.InternalPointList, this.InternalNodeList);
+                    navigator = new BinaryTreeNavigator<TDimension[], TagInfo>(this.InternalPointList, this.InternalNodeList);
                 }
                 return navigator;
             }
         }
 
-        private BinaryTreeNavigator<TDimension[], TNode> navigator;
+        private BinaryTreeNavigator<TDimension[], TagInfo> navigator;
         private BoundedPriorityList<int, double> nearestNeighborList = new BoundedPriorityList<int, double>(16, true);
 
         /// <summary>
@@ -123,12 +123,12 @@ namespace Supercluster.KDTree
             this.Metric = metric;
 
             this.InternalPointList = new List<TDimension[]>();
-            this.InternalNodeList = new List<TNode>();
+            this.InternalNodeList = new List<TagInfo>();
             this.Count = 0;
         }
         public void Build(
             List<TDimension[]> points,
-            List<TNode> nodes)
+            List<TagInfo> nodes)
         {
             // Calculate the number of nodes needed to contain the binary tree.
             // This is equivalent to finding the power of 2 greater than the number of points
@@ -137,7 +137,7 @@ namespace Supercluster.KDTree
             this.InternalNodeList.Clear();
             for(int ix = 0; ix < elementCount; ++ix) {
                 this.InternalPointList.Add(default(TDimension[]));
-                this.InternalNodeList.Add(default(TNode));
+                this.InternalNodeList.Add(default(TagInfo));
             }
             this.Count = points.Count;
             this.GenerateTree(0, 0, points, nodes);
@@ -149,7 +149,7 @@ namespace Supercluster.KDTree
         /// <param name="point">The point whose neighbors we search for.</param>
         /// <param name="neighbors">The number of neighbors to look for.</param>
         /// <returns>The</returns>
-        public bool NearestNeighbors(TDimension[] point, int neighbors, Func<TDimension[], TNode, KDTree<TDimension, TNode>.TreeNodeInfo> nodeBuilder, List<TreeNodeInfo> results)
+        public bool NearestNeighbors(TDimension[] point, int neighbors, Func<TDimension[], TagInfo, KDTree<TDimension, TagInfo>.TreeNodeInfo> nodeBuilder, List<TreeNodeInfo> results)
         {
             nearestNeighborList.Clear();
             nearestNeighborList.Reserve(point.Length);
@@ -166,7 +166,7 @@ namespace Supercluster.KDTree
         /// <param name="radius">The radius of the hyper-sphere</param>
         /// <param name="neighboors">The number of neighbors to return.</param>
         /// <returns>The specified number of closest points in the hyper-sphere</returns>
-        public bool RadialSearch(TDimension[] center, double radius, int neighboors, Func<TDimension[], TNode, KDTree<TDimension, TNode>.TreeNodeInfo> nodeBuilder, List<TreeNodeInfo> results)
+        public bool RadialSearch(TDimension[] center, double radius, int neighboors, Func<TDimension[], TagInfo, KDTree<TDimension, TagInfo>.TreeNodeInfo> nodeBuilder, List<TreeNodeInfo> results)
         {
             nearestNeighborList.Clear();
             nearestNeighborList.Reserve(center.Length);
@@ -205,7 +205,7 @@ namespace Supercluster.KDTree
             int index,
             int dim,
             IReadOnlyCollection<TDimension[]> points,
-            IEnumerable<TNode> nodes)
+            IEnumerable<TagInfo> nodes)
         {
             // See wikipedia for a good explanation kd-tree construction.
             // https://en.wikipedia.org/wiki/K-d_tree
@@ -228,13 +228,13 @@ namespace Supercluster.KDTree
             // We now split the sorted points into 2 groups
             // 1st group: points before the median
             var leftPoints = new TDimension[medianPointIdx][];
-            var leftNodes = new TNode[medianPointIdx];
+            var leftNodes = new TagInfo[medianPointIdx];
             Array.Copy(sortedPoints.Select(z => z.Point).ToArray(), leftPoints, leftPoints.Length);
             Array.Copy(sortedPoints.Select(z => z.Node).ToArray(), leftNodes, leftNodes.Length);
 
             // 2nd group: Points after the median
             var rightPoints = new TDimension[sortedPoints.Length - (medianPointIdx + 1)][];
-            var rightNodes = new TNode[sortedPoints.Length - (medianPointIdx + 1)];
+            var rightNodes = new TagInfo[sortedPoints.Length - (medianPointIdx + 1)];
             Array.Copy(
                 sortedPoints.Select(z => z.Point).ToArray(),
                 medianPointIdx + 1,

@@ -161,7 +161,7 @@ namespace KDTreeTests
                 }
             }
 
-            return new KDTree<TPoint, TNode>.TreeNodeInfo { Coordinates = points[bestIndex], Node = nodes[bestIndex] };
+            return new KDTree<TPoint, TNode>.TreeNodeInfo { Coordinates = points[bestIndex], TagInfo = nodes[bestIndex] };
         }
 
 
@@ -195,7 +195,7 @@ namespace KDTreeTests
                 }
             }
 
-            return pointsInRadius.Select(idx => new KDTree<TPoint, TNode>.TreeNodeInfo { Coordinates = points[idx], Node = nodes[idx] });
+            return pointsInRadius.Select(idx => new KDTree<TPoint, TNode>.TreeNodeInfo { Coordinates = points[idx], TagInfo = nodes[idx] });
         }
 
         #endregion

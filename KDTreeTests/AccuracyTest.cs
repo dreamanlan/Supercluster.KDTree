@@ -127,13 +127,13 @@ namespace KDTreeTests
             for (int i = 0; i < testDataSize; i++)
             {
                 List<KDTree<double, string>.TreeNodeInfo> treeNearest = new List<KDTree<double, string>.TreeNodeInfo>();
-                bool ret = tree.NearestNeighbors(testData[i], 1, (coords, str)=> { return new KDTree<double, string>.TreeNodeInfo { Coordinates = coords, Node = str }; }, treeNearest);
+                bool ret = tree.NearestNeighbors(testData[i], 1, (coords, str)=> { return new KDTree<double, string>.TreeNodeInfo { Coordinates = coords, TagInfo = str }; }, treeNearest);
                 var linearNearest = Utilities.LinearSearch(treePoints, treeNodes, testData[i], Utilities.L2Norm_Squared_Double);
 
                 Assert.That(Utilities.L2Norm_Squared_Double(testData[i], linearNearest.Coordinates), Is.EqualTo(Utilities.L2Norm_Squared_Double(testData[i], treeNearest[0].Coordinates)));
 
                 // TODO: wrote linear search for both node and point arrays
-                Assert.That(treeNearest[0].Node, Is.EqualTo(linearNearest.Node));
+                Assert.That(treeNearest[0].TagInfo, Is.EqualTo(linearNearest.TagInfo));
             }
         }
 
@@ -154,7 +154,7 @@ namespace KDTreeTests
             for (int i = 0; i < testDataSize; i++)
             {
                 List<KDTree<double, string>.TreeNodeInfo> treeRadial = new List<KDTree<double, string>.TreeNodeInfo>();
-                bool ret = tree.RadialSearch(testData[i], radius, -1, (coords, str) => new KDTree<double, string>.TreeNodeInfo { Coordinates = coords, Node = str }, treeRadial);
+                bool ret = tree.RadialSearch(testData[i], radius, -1, (coords, str) => new KDTree<double, string>.TreeNodeInfo { Coordinates = coords, TagInfo = str }, treeRadial);
                 var linearRadial = new List<KDTree<double, string>.TreeNodeInfo>(Utilities.LinearRadialSearch(
                     treeData,
                     treeNodes,
@@ -165,7 +165,7 @@ namespace KDTreeTests
                 for (int j = 0; j < treeRadial.Count; j++)
                 {
                     Assert.That(treeRadial[j].Coordinates, Is.EqualTo(linearRadial[j].Coordinates));
-                    Assert.That(treeRadial[j].Node, Is.EqualTo(linearRadial[j].Node));
+                    Assert.That(treeRadial[j].TagInfo, Is.EqualTo(linearRadial[j].TagInfo));
                 }
             }
         }
