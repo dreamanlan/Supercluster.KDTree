@@ -37,6 +37,17 @@ namespace Supercluster.KDTree
         {
             public TDimension[] Coordinates;
             public TagInfo TagInfo;
+
+            public static TreeNodeInfoCmp s_Cmp = new TreeNodeInfoCmp();
+        }
+        public class TreeNodeInfoCmp : IComparer<TreeNodeInfo>
+        {
+            public int CompareDim = 0;
+
+            public int Compare(TreeNodeInfo x, TreeNodeInfo y)
+            {
+                return x.Coordinates[this.CompareDim].CompareTo(y.Coordinates[this.CompareDim]);
+            }
         }
         /// <summary>
         /// The numbers of dimensions that the tree has.
@@ -87,6 +98,11 @@ namespace Supercluster.KDTree
 
         private BinaryTreeNavigator<TDimension[], TagInfo> navigator;
         private BoundedPriorityList<int, double> nearestNeighborList = new BoundedPriorityList<int, double>(16, true);
+
+        private SimpleObjectPool<TreeNodeInfo> treeNodeInfoPool = new SimpleObjectPool<TreeNodeInfo>();
+        private SimpleObjectPool<List<TreeNodeInfo>> treeNodeInfoListPool = new SimpleObjectPool<List<TreeNodeInfo>>();
+        private SimpleObjectPool<List<TDimension[]>> pointListPool = new SimpleObjectPool<List<TDimension[]>>();
+        private SimpleObjectPool<List<TagInfo>> tagInfoListPool = new SimpleObjectPool<List<TagInfo>>();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="KDTree{TDimension,TNode}"/> class.
@@ -204,44 +220,50 @@ namespace Supercluster.KDTree
         private void GenerateTree(
             int index,
             int dim,
-            IReadOnlyCollection<TDimension[]> points,
-            IEnumerable<TagInfo> nodes)
+            List<TDimension[]> points,
+            List<TagInfo> nodes)
         {
             // See wikipedia for a good explanation kd-tree construction.
             // https://en.wikipedia.org/wiki/K-d_tree
 
-            // zip both lists so we can sort nodes according to points
-            var zippedList = points.Zip(nodes, (p, n) => new { Point = p, Node = n });
-
-            // sort the points along the current dimension
-            var sortedPoints = zippedList.OrderBy(z => z.Point[dim]).ToArray();
+            var sortedPoints = this.treeNodeInfoListPool.Alloc();
+            for (int ix = 0; ix < points.Count && ix < nodes.Count; ++ix) {
+                var p = points[ix];
+                var n = nodes[ix];
+                var pt = this.treeNodeInfoPool.Alloc();
+                pt.Coordinates = p;
+                pt.TagInfo = n;
+                sortedPoints.Add(pt);
+            }
+            TreeNodeInfo.s_Cmp.CompareDim = dim;
+            sortedPoints.Sort(TreeNodeInfo.s_Cmp);
 
             // get the point which has the median value of the current dimension.
             var medianPoint = sortedPoints[points.Count / 2];
-            var medianPointIdx = sortedPoints.Length / 2;
+            var medianPointIdx = sortedPoints.Count / 2;
 
             // The point with the median value all the current dimension now becomes the value of the current tree node
             // The previous node becomes the parents of the current node.
-            this.InternalPointList[index] = medianPoint.Point;
-            this.InternalNodeList[index] = medianPoint.Node;
+            this.InternalPointList[index] = medianPoint.Coordinates;
+            this.InternalNodeList[index] = medianPoint.TagInfo;
 
             // We now split the sorted points into 2 groups
             // 1st group: points before the median
-            var leftPoints = new TDimension[medianPointIdx][];
-            var leftNodes = new TagInfo[medianPointIdx];
-            Array.Copy(sortedPoints.Select(z => z.Point).ToArray(), leftPoints, leftPoints.Length);
-            Array.Copy(sortedPoints.Select(z => z.Node).ToArray(), leftNodes, leftNodes.Length);
-
+            var leftPoints = this.pointListPool.Alloc();
+            var leftNodes = this.tagInfoListPool.Alloc();
+            for (int ix = 0; ix < medianPointIdx; ++ix) {
+                var pt = sortedPoints[ix];
+                leftPoints.Add(pt.Coordinates);
+                leftNodes.Add(pt.TagInfo);
+            }            
             // 2nd group: Points after the median
-            var rightPoints = new TDimension[sortedPoints.Length - (medianPointIdx + 1)][];
-            var rightNodes = new TagInfo[sortedPoints.Length - (medianPointIdx + 1)];
-            Array.Copy(
-                sortedPoints.Select(z => z.Point).ToArray(),
-                medianPointIdx + 1,
-                rightPoints,
-                0,
-                rightPoints.Length);
-            Array.Copy(sortedPoints.Select(z => z.Node).ToArray(), medianPointIdx + 1, rightNodes, 0, rightNodes.Length);
+            var rightPoints = this.pointListPool.Alloc();
+            var rightNodes = this.tagInfoListPool.Alloc();
+            for (int ix = medianPointIdx + 1; ix < sortedPoints.Count; ++ix) {
+                var pt = sortedPoints[ix];
+                rightPoints.Add(pt.Coordinates);
+                rightNodes.Add(pt.TagInfo);
+            }
 
             // We new recurse, passing the left and right arrays for arguments.
             // The current node's left and right values become the "roots" for
@@ -250,9 +272,9 @@ namespace Supercluster.KDTree
 
             // We only need to recurse if the point array contains more than one point
             // If the array has no points then the node stay a null value
-            if (leftPoints.Length <= 1)
+            if (leftPoints.Count <= 1)
             {
-                if (leftPoints.Length == 1)
+                if (leftPoints.Count == 1)
                 {
                     this.InternalPointList[LeftChildIndex(index)] = leftPoints[0];
                     this.InternalNodeList[LeftChildIndex(index)] = leftNodes[0];
@@ -264,9 +286,9 @@ namespace Supercluster.KDTree
             }
 
             // Do the same for the right points
-            if (rightPoints.Length <= 1)
+            if (rightPoints.Count <= 1)
             {
-                if (rightPoints.Length == 1)
+                if (rightPoints.Count == 1)
                 {
                     this.InternalPointList[RightChildIndex(index)] = rightPoints[0];
                     this.InternalNodeList[RightChildIndex(index)] = rightNodes[0];
@@ -276,6 +298,21 @@ namespace Supercluster.KDTree
             {
                 this.GenerateTree(RightChildIndex(index), nextDim, rightPoints, rightNodes);
             }
+
+            //recycle pool alloced elements
+            foreach(var pt in sortedPoints) {
+                this.treeNodeInfoPool.Recycle(pt);
+            }
+            sortedPoints.Clear();
+            this.treeNodeInfoListPool.Recycle(sortedPoints);
+            leftPoints.Clear();
+            this.pointListPool.Recycle(leftPoints);
+            leftNodes.Clear();
+            this.tagInfoListPool.Recycle(leftNodes);
+            rightPoints.Clear();
+            this.pointListPool.Recycle(rightPoints);
+            rightNodes.Clear();
+            this.tagInfoListPool.Recycle(rightNodes);
         }
 
         /// <summary>
