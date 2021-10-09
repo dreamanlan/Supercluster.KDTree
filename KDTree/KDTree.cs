@@ -113,7 +113,7 @@ namespace Supercluster.KDTree
         /// <param name="metric">The metric function which implicitly defines the metric space in which the KDTree operates in. This should satisfy the triangle inequality.</param>
         /// <param name="searchWindowMinValue">The minimum value to be used in node searches. If null, we assume that <typeparamref name="TDimension"/> has a static field named "MinValue". All numeric structs have this field.</param>
         /// <param name="searchWindowMaxValue">The maximum value to be used in node searches. If null, we assume that <typeparamref name="TDimension"/> has a static field named "MaxValue". All numeric structs have this field.</param>
-        public KDTree(int dimensions, 
+        public KDTree(int dimensions,
             Func<TDimension[], TDimension[], double> metric,
             TDimension searchWindowMinValue = default(TDimension),
             TDimension searchWindowMaxValue = default(TDimension))
@@ -151,7 +151,7 @@ namespace Supercluster.KDTree
             var elementCount = (int)Math.Pow(2, (int)(Math.Log(points.Count) / Math.Log(2)) + 1);
             this.InternalPointList.Clear();
             this.InternalNodeList.Clear();
-            for(int ix = 0; ix < elementCount; ++ix) {
+            for (int ix = 0; ix < elementCount; ++ix) {
                 this.InternalPointList.Add(default(TDimension[]));
                 this.InternalNodeList.Add(default(TagInfo));
             }
@@ -167,12 +167,15 @@ namespace Supercluster.KDTree
         /// <returns>The</returns>
         public bool NearestNeighbors(TDimension[] point, int neighbors, Func<TDimension[], TagInfo, KDTree<TDimension, TagInfo>.TreeNodeInfo> nodeBuilder, List<TreeNodeInfo> results)
         {
-            nearestNeighborList.Clear();
-            nearestNeighborList.Reserve(point.Length);
+            this.nearestNeighborList.Clear();
+            if (neighbors <= 0)
+                this.nearestNeighborList.Reserve(point.Length);
+            else
+                this.nearestNeighborList.Reserve(neighbors);
             var rect = HyperRect<TDimension>.Infinite(this.Dimensions, this.MaxValue, this.MinValue);
-            this.SearchForNearestNeighbors(0, point, rect, 0, nearestNeighborList, double.MaxValue);
+            this.SearchForNearestNeighbors(0, point, rect, 0, this.nearestNeighborList, double.MaxValue);
 
-            return nearestNeighborList.ToResultSet(this, nodeBuilder, results);
+            return this.nearestNeighborList.ToResultSet(this, nodeBuilder, results);
         }
 
         /// <summary>
@@ -182,32 +185,23 @@ namespace Supercluster.KDTree
         /// <param name="radius">The radius of the hyper-sphere</param>
         /// <param name="neighboors">The number of neighbors to return.</param>
         /// <returns>The specified number of closest points in the hyper-sphere</returns>
-        public bool RadialSearch(TDimension[] center, double radius, int neighboors, Func<TDimension[], TagInfo, KDTree<TDimension, TagInfo>.TreeNodeInfo> nodeBuilder, List<TreeNodeInfo> results)
+        public bool RadialSearch(TDimension[] center, double radius, int neighbors, Func<TDimension[], TagInfo, KDTree<TDimension, TagInfo>.TreeNodeInfo> nodeBuilder, List<TreeNodeInfo> results)
         {
-            nearestNeighborList.Clear();
-            nearestNeighborList.Reserve(center.Length);
-            if (neighboors == -1)
-            {
-                this.SearchForNearestNeighbors(
-                    0,
-                    center,
-                    HyperRect<TDimension>.Infinite(this.Dimensions, this.MaxValue, this.MinValue),
-                    0,
-                    nearestNeighborList,
-                    radius);
-            }
+            this.nearestNeighborList.Clear();
+            if (neighbors <= 0)
+                this.nearestNeighborList.Reserve(center.Length);
             else
-            {
-                this.SearchForNearestNeighbors(
+                this.nearestNeighborList.Reserve(neighbors);
+
+            this.SearchForNearestNeighbors(
                     0,
                     center,
                     HyperRect<TDimension>.Infinite(this.Dimensions, this.MaxValue, this.MinValue),
                     0,
-                    nearestNeighborList,
+                    this.nearestNeighborList,
                     radius);
-            }
 
-            return nearestNeighborList.ToResultSet(this, nodeBuilder, results);
+            return this.nearestNeighborList.ToResultSet(this, nodeBuilder, results);
         }
 
         /// <summary>
@@ -255,7 +249,7 @@ namespace Supercluster.KDTree
                 var pt = sortedPoints[ix];
                 leftPoints.Add(pt.Coordinates);
                 leftNodes.Add(pt.TagInfo);
-            }            
+            }
             // 2nd group: Points after the median
             var rightPoints = this.pointListPool.Alloc();
             var rightNodes = this.tagInfoListPool.Alloc();
@@ -272,35 +266,29 @@ namespace Supercluster.KDTree
 
             // We only need to recurse if the point array contains more than one point
             // If the array has no points then the node stay a null value
-            if (leftPoints.Count <= 1)
-            {
-                if (leftPoints.Count == 1)
-                {
+            if (leftPoints.Count <= 1) {
+                if (leftPoints.Count == 1) {
                     this.InternalPointList[LeftChildIndex(index)] = leftPoints[0];
                     this.InternalNodeList[LeftChildIndex(index)] = leftNodes[0];
                 }
             }
-            else
-            {
+            else {
                 this.GenerateTree(LeftChildIndex(index), nextDim, leftPoints, leftNodes);
             }
 
             // Do the same for the right points
-            if (rightPoints.Count <= 1)
-            {
-                if (rightPoints.Count == 1)
-                {
+            if (rightPoints.Count <= 1) {
+                if (rightPoints.Count == 1) {
                     this.InternalPointList[RightChildIndex(index)] = rightPoints[0];
                     this.InternalNodeList[RightChildIndex(index)] = rightNodes[0];
                 }
             }
-            else
-            {
+            else {
                 this.GenerateTree(RightChildIndex(index), nextDim, rightPoints, rightNodes);
             }
 
             //recycle pool alloced elements
-            foreach(var pt in sortedPoints) {
+            foreach (var pt in sortedPoints) {
                 this.treeNodeInfoPool.Recycle(pt);
             }
             sortedPoints.Clear();
@@ -333,8 +321,7 @@ namespace Supercluster.KDTree
             double maxSearchRadiusSquared)
         {
             if (this.InternalPointList.Count <= nodeIndex || nodeIndex < 0
-                || this.InternalPointList[nodeIndex] == null)
-            {
+                || this.InternalPointList[nodeIndex] == null) {
                 return;
             }
 
@@ -373,12 +360,9 @@ namespace Supercluster.KDTree
             var closestPointInFurtherRect = furtherRect.GetClosestPoint(target);
             var distanceSquaredToTarget = this.Metric(closestPointInFurtherRect, target);
 
-            if (distanceSquaredToTarget.CompareTo(maxSearchRadiusSquared) <= 0)
-            {
-                if (nearestNeighbors.IsFull)
-                {
-                    if (distanceSquaredToTarget.CompareTo(nearestNeighbors.MaxPriority) < 0)
-                    {
+            if (distanceSquaredToTarget.CompareTo(maxSearchRadiusSquared) <= 0) {
+                if (nearestNeighbors.IsFull) {
+                    if (distanceSquaredToTarget.CompareTo(nearestNeighbors.MaxPriority) < 0) {
                         this.SearchForNearestNeighbors(
                             furtherNode,
                             target,
@@ -388,8 +372,7 @@ namespace Supercluster.KDTree
                             maxSearchRadiusSquared);
                     }
                 }
-                else
-                {
+                else {
                     this.SearchForNearestNeighbors(
                         furtherNode,
                         target,
@@ -402,8 +385,7 @@ namespace Supercluster.KDTree
 
             // Try to add the current node to our nearest neighbors list
             distanceSquaredToTarget = this.Metric(this.InternalPointList[nodeIndex], target);
-            if (distanceSquaredToTarget.CompareTo(maxSearchRadiusSquared) <= 0)
-            {
+            if (distanceSquaredToTarget.CompareTo(maxSearchRadiusSquared) <= 0) {
                 nearestNeighbors.Add(nodeIndex, distanceSquaredToTarget);
             }
         }

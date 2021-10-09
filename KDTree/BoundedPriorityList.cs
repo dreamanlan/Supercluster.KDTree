@@ -53,7 +53,7 @@ namespace Supercluster.KDTree
         /// <summary>
         /// Gets the maximum allows capacity for the <see cref="BoundedPriorityList{TElement,TPriority}"/>
         /// </summary>
-        public int Capacity { get; }
+        public int Capacity { get; private set; }
 
         /// <summary>
         /// Returns true if the list is at maximum capacity.
@@ -104,6 +104,7 @@ namespace Supercluster.KDTree
 
         public void Reserve(int capacity)
         {
+            this.Capacity = capacity;
             this.priorityList.Capacity = capacity;
             this.elementList.Capacity = capacity;
         }
